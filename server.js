@@ -17,7 +17,7 @@ app.use(express.static(__dirname));
 
 // Все запросы → index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'kanban.html'));
 });
 
 // Хранилище в памяти
@@ -74,3 +74,4 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`📁 Текущая директория: ${__dirname}`);
   console.log(`📁 Файлы в директории:`, require('fs').readdirSync(__dirname));
 });
+
