@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -11,15 +11,17 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Раздаём статические файлы
-app.use(express.static(__dirname));
+// ВАЖНОЕ ИСПРАВЛЕНИЕ ДЛЯ RENDER:
+// Путь к статическим файлам. На Render все файлы лежат в папке /src
+const staticPath = path.join(__dirname);
+app.use(express.static(staticPath));
 
 // Все запросы → index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(staticPath, 'index.html'));
 });
 
-// Хранилище в памяти (пока просто)
+// Хранилище в памяти
 let boards = {};
 
 io.on('connection', (socket) => {
@@ -70,4 +72,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Сервер запущен на порту ${PORT}`);
+  console.log(`📁 Путь к статике: ${staticPath}`);
 });
