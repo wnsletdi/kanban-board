@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kanban Доска - Реальное время</title>
+    <title>Kanban Доска</title>
     <style>
         * {
             margin: 0;
@@ -39,10 +39,6 @@
 
         .status.connected {
             border-left: 5px solid #4CAF50;
-        }
-
-        .status.disconnected {
-            border-left: 5px solid #f44336;
         }
 
         .board {
@@ -83,39 +79,138 @@
             transform: translateY(-2px);
         }
 
-        .card:active {
-            cursor: grabbing;
-        }
-
         .card.dragging {
             opacity: 0.5;
             transform: rotate(3deg);
         }
 
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            word-break: break-word;
+        }
+
+        .card-description {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .card-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8em;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .edit-btn {
+            color: #2196F3;
+        }
+
+        .edit-btn:hover {
+            background: #E3F2FD;
+        }
+
+        .delete-btn {
+            color: #f44336;
+        }
+
+        .delete-btn:hover {
+            background: #FFEBEE;
+        }
+
         .add-card-form {
             margin-top: 15px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-textarea {
+            height: 60px;
+            resize: vertical;
+        }
+
+        .form-buttons {
             display: flex;
             gap: 10px;
         }
 
-        .add-card-form input {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .add-card-form button {
-            background: #4CAF50;
-            color: white;
-            border: none;
+        .btn {
             padding: 8px 15px;
+            border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 14px;
         }
 
-        .add-card-form button:hover {
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
             background: #45a049;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .modal-title {
+            margin-bottom: 15px;
+            color: #333;
         }
 
         .online-users {
@@ -136,66 +231,61 @@
 </head>
 <body>
     <div class="container">
-        <h1>📋 Kanban Доска (Реальное время)</h1>
+        <h1>Kanban Доска</h1>
         
         <div id="status" class="status">Подключение к серверу...</div>
         
-        <div id="online-users" class="online-users">
-            👥 Онлайн: <span id="user-count" class="user-count">0</span>
-        </div>
-
         <div class="board" id="board">
-            <!-- Колонки будут добавлены через JavaScript -->
+            <!-- Колонки -->
         </div>
 
-        <div style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
-            Откройте эту страницу в нескольких вкладках или на разных устройствах, чтобы увидеть синхронизацию в реальном времени!
+        <!-- Окно для редактирования -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <h3 class="modal-title">Редактировать задачу</h3>
+                <input type="hidden" id="edit-card-id">
+                <input type="text" id="edit-card-title" class="form-input" placeholder="Название задачи...">
+                <textarea id="edit-card-description" class="form-input form-textarea" placeholder="Описание задачи..."></textarea>
+                <select id="edit-card-column" class="form-input">
+                    <option value="todo">Сделать</option>
+                    <option value="progress">В работе</option>
+                    <option value="done">Готово</option>
+                </select>
+                <div class="form-buttons">
+                    <button onclick="saveCardEdit()" class="btn btn-primary">Сохранить</button>
+                    <button onclick="closeEditModal()" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Подключаем Socket.IO клиентскую библиотеку -->
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
-    
-    <!-- Наш JavaScript код -->
     <script>
-        // ==================== ПЕРЕМЕННЫЕ ====================
-        const BOARD_ID = "team-board-1"; // ID нашей доски
+        // ПЕРЕМЕННЫЕ
+        const BOARD_ID = "team-board-1";
         let socket = null;
         let currentBoard = null;
         let draggedCard = null;
 
-        // ==================== ПОДКЛЮЧЕНИЕ К СЕРВЕРУ ====================
+        //  ПОДКЛЮЧЕНИЕ К СЕРВЕРУ 
         function connectToServer() {
-            // Подключаемся к серверу (порт 3001, который мы указали в server.js)
             socket = io();
             
-            // Событие: успешное подключение
             socket.on('connect', () => {
-                updateStatus('✅ Подключено к серверу', 'connected');
-                
-                // Присоединяемся к доске
+                updateStatus('Подключено к серверу', 'connected');
                 socket.emit('join-board', BOARD_ID);
             });
             
-            // Событие: отключение от сервера
             socket.on('disconnect', () => {
-                updateStatus('❌ Отключено от сервера', 'disconnected');
+                updateStatus('Отключено от сервера', 'disconnected');
             });
             
-            // Событие: получаем начальное состояние доски
             socket.on('board-state', (boardData) => {
                 console.log('Получено состояние доски:', boardData);
                 currentBoard = boardData;
                 renderBoard(boardData);
             });
             
-            // Событие: кто-то переместил карточку
-            socket.on('card-moved', (data) => {
-                console.log('Другой пользователь переместил карточку:', data);
-                moveCardLocally(data.cardId, data.toColumnId);
-            });
-            
-            // Событие: кто-то создал карточку
             socket.on('card-created', (cardData) => {
                 console.log('Создана новая карточка:', cardData);
                 if (!currentBoard.cards.find(c => c.id === cardData.id)) {
@@ -203,9 +293,38 @@
                     renderBoard(currentBoard);
                 }
             });
+            
+            socket.on('card-updated', (data) => {
+                console.log('Карточка обновлена:', data);
+                const cardIndex = currentBoard.cards.findIndex(c => c.id === data.cardId);
+                if (cardIndex !== -1) {
+                    currentBoard.cards[cardIndex].title = data.title;
+                    currentBoard.cards[cardIndex].description = data.description;
+                    currentBoard.cards[cardIndex].columnId = data.columnId;
+                    renderBoard(currentBoard);
+                }
+            });
+            
+            socket.on('card-deleted', (data) => {
+                console.log('Карточка удалена:', data);
+                const cardIndex = currentBoard.cards.findIndex(c => c.id === data.cardId);
+                if (cardIndex !== -1) {
+                    currentBoard.cards.splice(cardIndex, 1);
+                    renderBoard(currentBoard);
+                }
+            });
+            
+            socket.on('card-moved', (data) => {
+                console.log('Карточка перемещена:', data);
+                const cardIndex = currentBoard.cards.findIndex(c => c.id === data.cardId);
+                if (cardIndex !== -1) {
+                    currentBoard.cards[cardIndex].columnId = data.toColumnId;
+                    renderBoard(currentBoard);
+                }
+            });
         }
 
-        // ==================== ОТОБРАЖЕНИЕ ====================
+        //  ОТОБРАЖЕНИЕ 
         function updateStatus(text, className) {
             const statusEl = document.getElementById('status');
             statusEl.textContent = text;
@@ -216,34 +335,25 @@
             const boardEl = document.getElementById('board');
             boardEl.innerHTML = '';
             
-            // Создаём колонки
             board.columns.forEach(column => {
                 const columnEl = document.createElement('div');
                 columnEl.className = 'column';
                 columnEl.dataset.columnId = column.id;
                 
-                // Заголовок колонки
                 const titleEl = document.createElement('h2');
                 titleEl.textContent = column.title;
                 columnEl.appendChild(titleEl);
                 
-                // Карточки в этой колонке
+                // Карточки в колонке
                 const cardsInColumn = board.cards.filter(card => card.columnId === column.id);
                 cardsInColumn.forEach(card => {
-                    const cardEl = createCardElement(card);
-                    columnEl.appendChild(cardEl);
+                    columnEl.appendChild(createCardElement(card));
                 });
                 
                 // Форма для добавления новой карточки
-                const formEl = document.createElement('div');
-                formEl.className = 'add-card-form';
-                formEl.innerHTML = `
-                    <input type="text" placeholder="Название задачи..." id="input-${column.id}">
-                    <button onclick="addCard('${column.id}')">+</button>
-                `;
-                columnEl.appendChild(formEl);
+                columnEl.appendChild(createAddCardForm(column.id));
                 
-                // Разрешаем сбрасывать карточки в эту колонку
+                // Разрешаем сбрасывать карточки
                 columnEl.addEventListener('dragover', handleDragOver);
                 columnEl.addEventListener('drop', handleDrop);
                 
@@ -256,18 +366,119 @@
             cardEl.className = 'card';
             cardEl.id = `card-${card.id}`;
             cardEl.draggable = true;
-            cardEl.textContent = card.title;
             cardEl.dataset.cardId = card.id;
             cardEl.dataset.columnId = card.columnId;
             
-            // События перетаскивания
+            const titleEl = document.createElement('div');
+            titleEl.className = 'card-title';
+            titleEl.textContent = card.title;
+            
+            const descEl = document.createElement('div');
+            descEl.className = 'card-description';
+            descEl.textContent = card.description || '';
+            
+            const actionsEl = document.createElement('div');
+            actionsEl.className = 'card-actions';
+            actionsEl.innerHTML = `
+                <button class="card-btn edit-btn" onclick="openEditModal('${card.id}')">Изменить</button>
+                <button class="card-btn delete-btn" onclick="deleteCard('${card.id}')">Удалить</button>
+            `;
+            
+            cardEl.appendChild(titleEl);
+            cardEl.appendChild(descEl);
+            cardEl.appendChild(actionsEl);
+            
             cardEl.addEventListener('dragstart', handleDragStart);
             cardEl.addEventListener('dragend', handleDragEnd);
             
             return cardEl;
         }
 
-        // ==================== ПЕРЕТАСКИВАНИЕ ====================
+        function createAddCardForm(columnId) {
+            const formEl = document.createElement('div');
+            formEl.className = 'add-card-form';
+            formEl.innerHTML = `
+                <input type="text" class="form-input" id="input-title-${columnId}" placeholder="Название задачи...">
+                <textarea class="form-input form-textarea" id="input-desc-${columnId}" placeholder="Описание задачи..."></textarea>
+                <div class="form-buttons">
+                    <button class="btn btn-primary" onclick="addCard('${columnId}')">Добавить</button>
+                </div>
+            `;
+            return formEl;
+        }
+
+        // ОБРАБОТКА КАРТОЧЕК 
+        function addCard(columnId) {
+            const titleInput = document.getElementById(`input-title-${columnId}`);
+            const descInput = document.getElementById(`input-desc-${columnId}`);
+            
+            const title = titleInput.value.trim();
+            const description = descInput.value.trim();
+            
+            if (!title) {
+                alert('Введите название задачи!');
+                return;
+            }
+            
+            socket.emit('create-card', {
+                title: title,
+                description: description,
+                columnId: columnId,
+                boardId: BOARD_ID
+            });
+            
+            titleInput.value = '';
+            descInput.value = '';
+        }
+
+        function deleteCard(cardId) {
+            if (!confirm('Удалить эту задачу?')) return;
+            
+            socket.emit('delete-card', {
+                cardId: cardId,
+                boardId: BOARD_ID
+            });
+        }
+
+        function openEditModal(cardId) {
+            const card = currentBoard.cards.find(c => c.id === cardId);
+            if (!card) return;
+            
+            document.getElementById('edit-card-id').value = cardId;
+            document.getElementById('edit-card-title').value = card.title;
+            document.getElementById('edit-card-description').value = card.description || '';
+            document.getElementById('edit-card-column').value = card.columnId;
+            
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function saveCardEdit() {
+            const cardId = document.getElementById('edit-card-id').value;
+            const title = document.getElementById('edit-card-title').value.trim();
+            const description = document.getElementById('edit-card-description').value.trim();
+            const columnId = document.getElementById('edit-card-column').value;
+            
+            if (!title) {
+                alert('Название задачи не может быть пустым!');
+                return;
+            }
+            
+            socket.emit('update-card', {
+                cardId: cardId,
+                title: title,
+                description: description,
+                columnId: columnId,
+                boardId: BOARD_ID
+            });
+            
+            closeEditModal();
+        }
+
+        // ПЕРЕТАСКИВАНИЕ 
         function handleDragStart(e) {
             draggedCard = {
                 id: e.target.dataset.cardId,
@@ -289,15 +500,11 @@
 
         function handleDrop(e) {
             e.preventDefault();
-            
             if (!draggedCard) return;
             
             const toColumnId = e.currentTarget.dataset.columnId;
-            
-            // Если карточку бросили в ту же колонку - ничего не делаем
             if (draggedCard.columnId === toColumnId) return;
             
-            // Отправляем событие на сервер
             socket.emit('move-card', {
                 cardId: draggedCard.id,
                 fromColumnId: draggedCard.columnId,
@@ -305,45 +512,22 @@
                 boardId: BOARD_ID
             });
             
-            // Немедленно обновляем локально (оптимистичное обновление)
-            moveCardLocally(draggedCard.id, toColumnId);
-        }
-
-        function moveCardLocally(cardId, toColumnId) {
-            const cardIndex = currentBoard.cards.findIndex(c => c.id === cardId);
+            // Оптимистичное обновление
+            const cardIndex = currentBoard.cards.findIndex(c => c.id === draggedCard.id);
             if (cardIndex !== -1) {
                 currentBoard.cards[cardIndex].columnId = toColumnId;
                 renderBoard(currentBoard);
             }
         }
 
-        // ==================== СОЗДАНИЕ КАРТОЧЕК ====================
-        function addCard(columnId) {
-            const input = document.getElementById(`input-${columnId}`);
-            const title = input.value.trim();
-            
-            if (!title) {
-                alert('Введите название задачи!');
-                return;
-            }
-            
-            // Отправляем на сервер
-            socket.emit('create-card', {
-                title: title,
-                columnId: columnId,
-                boardId: BOARD_ID
-            });
-            
-            input.value = '';
-        }
-
-        // ==================== ЗАПУСК ====================
-        // При загрузке страницы подключаемся к серверу
+        //  ЗАПУСК 
         window.onload = function() {
             connectToServer();
             
-            // Экспортируем функции в глобальную область видимости
-            window.addCard = addCard;
+            // Закрытие окна по клику вне его
+            document.getElementById('editModal').addEventListener('click', function(e) {
+                if (e.target === this) closeEditModal();
+            });
         };
     </script>
 </body>
