@@ -16,7 +16,7 @@ const io = new Server(server, {
 // Раздаём статические файлы
 app.use(express.static(__dirname));
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'kanban.html'));
 });
 
 // Хранилище данных
@@ -142,3 +142,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(` Сервер запущен на порту ${PORT}`);
 });
+
